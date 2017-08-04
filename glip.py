@@ -30,11 +30,34 @@ password.send_keys("MoT159357")
 email.send_keys("tomas.houfek@eledus.cz")
 driver.find_element_by_class_name("submit").click()
 time.sleep(20)
+'''driver.find_element_by_id("49818214402").click()
+time.sleep(10)
 groups = driver.find_elements_by_class_name("grouptab")
-texts = driver.find_elements_by_class_name("post")
-for group in groups:
-    group_name = group.get_attribute('innerHTML')
-    print(group_name)
+group_ids, group_names = [], []
+texts = driver.find_elements_by_class_name("post_text")
+'''
+
+all_groups = driver.find_elements_by_class_name("grouptab")
+group_ids, group_names, visible_groups = [], [], []
+
+for group in all_groups:
+    print(group.get_attribute("style"))
+    if group.get_attribute("style") == "display: block;":
+        visible_groups.append(group.get_attribute("id"))
+
+visible_groups.pop(0)
+print(group_ids)
+for grp_id in group_ids:
+    driver.find_element_by_id(grp_id).click()
+    print(grp_id)
+    time.sleep(2)
+'''        
 for text in texts:
-    text_value = group.get_attribute('innerHTML')
+    text_value = text.get_attribute('innerHTML')
     print(text_value)
+
+print(group_ids,group_names)
+
+for group in groups:
+    group_ids.append(group.get_attribute("id"))
+'''
