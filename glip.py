@@ -1,5 +1,5 @@
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, StaleElementReferenceException, NoSuchElementException
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
@@ -67,51 +67,44 @@ class OrderedSet(collections.MutableSet):
             return len(self) == len(other) and list(self) == list(other)
         return set(self) == set(other)
         
-def waitForElementID(drive,elementID):
-    element = WebDriverWait(drive, 30).until(
-        EC.presence_of_element_located((By.ID, elementID))
-    )
-    return element
-
-def waitForElementClassName(drive,elementClass):
-    element = WebDriverWait(drive, 30).until(
-        EC.presence_of_element_located((By.CLASS_NAME, elementClass))
-    )
-    return element
-    
-def waitForElementClassNameShort(drive,elementClass):
-    element = WebDriverWait(drive, 1).until(
-    EC.presence_of_element_located((By.CLASS_NAME, elementClass))
-    )
-    return element   
-    
-def waitForElementName(drive,elementName):
-    element = WebDriverWait(drive, 30).until(
-        EC.presence_of_element_located((By.NAME, elementName))
-    )
-    return element
-
-def waitForElementTagName(drive,elementTagName):
-    element = WebDriverWait(drive, 30).until(
-        EC.presence_of_element_located((By.TAG_NAME, elementTagName))
-    )
-    return element    
+def waitForElement(drive,element_type,element,wait_time):
+    if element_type == "ID":
+        element = WebDriverWait(drive, wait_time).until(
+            EC.presence_of_element_located((By.ID, element))
+        )
+        return element
+    elif element_type == "CLASS":
+        element = WebDriverWait(drive, wait_time).until(
+            EC.presence_of_element_located((By.CLASS_NAME, element))
+        )   
+        return element
+    elif element_type == "NAME":
+        element = WebDriverWait(drive, wait_time).until(
+            EC.presence_of_element_located((By.NAME, element))
+        )
+        return element
+    elif element_type == "TAG":
+        element = WebDriverWait(drive, wait_time).until(
+            EC.presence_of_element_located((By.TAG_NAME, element))
+        )
+        return element    
 
 driver = webdriver.Chrome("../new_hodoor/Hodoor/node_modules/chromedriver/lib/chromedriver/chromedriver")
 driver.get('https://glip.com/')
     
-waitForElementID(driver,"sign_in").click()
-email = waitForElementName(driver,"email")
-password = waitForElementName(driver,"password")
+waitForElement(driver,"ID","sign_in",30).click()
+email = waitForElement(driver,"NAME","email",30)
+password = waitForElement(driver,"NAME","password",30)
 
 
 password.send_keys("MoT159357")
 email.send_keys("tomas.houfek@eledus.cz")
-waitForElementClassName(driver,"submit").click()
+waitForElement(driver,"CLASS","submit",30).click()
 
-waitForElementClassName(driver,"grouptab")
+waitForElement(driver,"CLASS","grouptab",30)
 all_groups = driver.find_elements_by_class_name("grouptab")
-group_ids, group_names, visible_groups, texts, first_texts = [], [], [], [], []
+visible_groups, texts, all_data  = [], [], []
+StaleElement = True
 
 for group in all_groups:
     if (group.get_attribute("style") == 'display: block;'):
@@ -121,34 +114,75 @@ for group in all_groups:
             })
 
 for grp_id in visible_groups:
-    waitForElementID(driver,grp_id["id"]).click()
-    print(grp_id["name"])    
+    whole_data = []
+    waitForElement(driver,"ID",grp_id["id"],30).click()
+    print(grp_id["name"])
     find_elem = None
-    first_elemets = driver.find_elements_by_class_name("post_text")
-    for element in first_elemets:
-        first_texts.append(element.get_attribute("innerHTML"))
+    try:
+        waitForElement(driver,"CLASS","post",30)
+        first_elemets = driver.find_elements_by_class_name("post")
+        for element in first_elemets:
+            name = element.find_element_by_tag_name("author").get_attribute("innerHTML")
+            timedate = element.find_element_by_class_name("timestamp").get_attribute("innerHTML")
+            text = element.find_element_by_class_name("post_text").get_attribute("innerHTML")
+            whole_data.append({
+                "name" : name,
+                "time" : timedate,
+                "text" : text
+            })
+    except TimeoutException as ex:
+        print("Thrown exception: ", ex)
     while not find_elem:
         try:
-            find_elem = waitForElementClassNameShort(driver,"calls-to-action-welcome")
+            find_elem = waitForElement(driver,"CLASS","calls-to-action-welcome",1)
         except:
+            if StaleElement:
+                driver.execute_script("window.scrollTo(0, -200)")
             try:
                 actions = ActionChains(driver)
-                actions.move_to_element(waitForElementClassName(driver,"post_text"))
+                actions.move_to_element(waitForElement(driver,"CLASS","post_text",30))
                 actions.perform()
-                texts = driver.find_elements_by_class_name("post_text")
-                for text in texts:
-                    first_texts.append(text.get_attribute("innerHTML"))
-                    first_texts = list(OrderedSet(first_texts))
-                driver.execute_script("window.scrollTo(0, -200)")
-                waitForElementClassName(driver,"post_text")
+                waitForElement(driver,"CLASS","post",30)
+                if StaleElement:
+                    next_elements = driver.find_elements_by_class_name("post")
+                try:
+                    for element in next_elements:
+                        try:
+                            name = element.find_element_by_tag_name("author").get_attribute("innerHTML")
+                        except NoSuchElementException:
+                            name = "Noone"
+                        timedate = element.find_element_by_class_name("timestamp").get_attribute("innerHTML")
+                        text = element.find_element_by_class_name("post_text").get_attribute("innerHTML")
+                        if len(text) >= 0:
+                            whole_data.append({
+                                "name" : name,
+                                "time" : timedate,
+                                "text" : text
+                            })    
+                    StaleElement = True
+                except StaleElementReferenceException:
+                    next_elements = driver.find_elements_by_class_name("post")
+                    StaleElement = False
             except TimeoutException as ex:
                 print("Thrown exception: ", ex)
-    for textaz in first_texts:
-        print(textaz)
-        
+    all_data+=whole_data
+    for data in whole_data:
+        print(data["name"],"\t\t\t",data["time"],"\n",data["text"])
+    time.sleep(10)
 ''' 
    for text in texts:  
         for tex in text:      
             text_value = tex.get_attribute('innerHTML')
             print(text_value)
-'''
+
+                    for author in authors:
+                        waitForElementTagName(driver, "author")
+                        print(author.get_attribute("innerHTML"))
+                    for timedate in times:
+                        waitForElementClassName(driver, "timestamp")
+                        print(timedate.get_attribute("innerHTML"))
+                    
+                    for text in texts:
+                        waitForElementClassName(driver, "post_text")
+                        print(text.get_attribute("innerHTML"))
+                        '''
