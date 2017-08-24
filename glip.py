@@ -8,65 +8,8 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 from selenium.webdriver.common.keys import Keys
 import collections
+import os.path
 
-class OrderedSet(collections.MutableSet):
-
-    def __init__(self, iterable=None):
-        self.end = end = [] 
-        end += [None, end, end]         # sentinel node for doubly linked list
-        self.map = {}                   # key --> [key, prev, next]
-        if iterable is not None:
-            self |= iterable
-
-    def __len__(self):
-        return len(self.map)
-
-    def __contains__(self, key):
-        return key in self.map
-
-    def add(self, key):
-        if key not in self.map:
-            end = self.end
-            curr = end[1]
-            curr[2] = end[1] = self.map[key] = [key, curr, end]
-
-    def discard(self, key):
-        if key in self.map:        
-            key, prev, next = self.map.pop(key)
-            prev[2] = next
-            next[1] = prev
-
-    def __iter__(self):
-        end = self.end
-        curr = end[2]
-        while curr is not end:
-            yield curr[0]
-            curr = curr[2]
-
-    def __reversed__(self):
-        end = self.end
-        curr = end[1]
-        while curr is not end:
-            yield curr[0]
-            curr = curr[1]
-
-    def pop(self, last=True):
-        if not self:
-            raise KeyError('set is empty')
-        key = self.end[1][0] if last else self.end[2][0]
-        self.discard(key)
-        return key
-
-    def __repr__(self):
-        if not self:
-            return '%s()' % (self.__class__.__name__,)
-        return '%s(%r)' % (self.__class__.__name__, list(self))
-
-    def __eq__(self, other):
-        if isinstance(other, OrderedSet):
-            return len(self) == len(other) and list(self) == list(other)
-        return set(self) == set(other)
-        
 def waitForElement(drive,element_type,element,wait_time):
     if element_type == "ID":
         element = WebDriverWait(drive, wait_time).until(
@@ -87,15 +30,13 @@ def waitForElement(drive,element_type,element,wait_time):
         element = WebDriverWait(drive, wait_time).until(
             EC.presence_of_element_located((By.TAG_NAME, element))
         )
-        return element    
-
-driver = webdriver.Chrome("../new_hodoor/Hodoor/node_modules/chromedriver/lib/chromedriver/chromedriver")
+        return element   
+driver = webdriver.Chrome("../../new_hodoor/Hodoor/node_modules/chromedriver/lib/chromedriver/chromedriver")
 driver.get('https://glip.com/')
     
 waitForElement(driver,"ID","sign_in",30).click()
 email = waitForElement(driver,"NAME","email",30)
 password = waitForElement(driver,"NAME","password",30)
-
 
 password.send_keys("MoT159357")
 email.send_keys("tomas.houfek@eledus.cz")
@@ -116,25 +57,33 @@ for group in all_groups:
 for grp_id in visible_groups:
     whole_data = []
     waitForElement(driver,"ID",grp_id["id"],30).click()
-    print(grp_id["name"])
+    filepath = os.path.join('./Conversations/', grp_id["name"])
+    chat_file  = open(filepath, "w")
     find_elem = None
-    try:
-        waitForElement(driver,"CLASS","post",30)
-        first_elemets = driver.find_elements_by_class_name("post")
-        for element in first_elemets:
-            name = element.find_element_by_tag_name("author").get_attribute("innerHTML")
-            timedate = element.find_element_by_class_name("timestamp").get_attribute("innerHTML")
-            text = element.find_element_by_class_name("post_text").get_attribute("innerHTML")
-            whole_data.append({
-                "name" : name,
-                "time" : timedate,
-                "text" : text
-            })
-    except TimeoutException as ex:
-        print("Thrown exception: ", ex)
     while not find_elem:
         try:
             find_elem = waitForElement(driver,"CLASS","calls-to-action-welcome",1)
+            try:
+                next_elements = driver.find_elements_by_class_name("post")
+                for element in next_elements[::-1]:
+                    try:
+                        name = element.find_element_by_tag_name("author").get_attribute("innerHTML")
+                    except NoSuchElementException:
+                        name = "None"
+                    timedate = element.find_element_by_class_name("timestamp").get_attribute("innerHTML")
+                    text = element.find_element_by_class_name("post_text").get_attribute("innerHTML")
+                    if len(text) > 0:
+                        whole_data.append({
+                            "name" : name,
+                            "time" : timedate,
+                            "text" : text
+                        })  
+            except: 
+                whole_data.append({
+                    "name": "",
+                    "time": "",
+                    "text": "NO CONVERSATIONS"
+                })
         except:
             if StaleElement:
                 driver.execute_script("window.scrollTo(0, -200)")
@@ -146,14 +95,14 @@ for grp_id in visible_groups:
                 if StaleElement:
                     next_elements = driver.find_elements_by_class_name("post")
                 try:
-                    for element in next_elements:
+                    for element in next_elements[::-1]:
                         try:
                             name = element.find_element_by_tag_name("author").get_attribute("innerHTML")
                         except NoSuchElementException:
-                            name = "Noone"
+                            name = "None"
                         timedate = element.find_element_by_class_name("timestamp").get_attribute("innerHTML")
                         text = element.find_element_by_class_name("post_text").get_attribute("innerHTML")
-                        if len(text) >= 0:
+                        if len(text) > 0:
                             whole_data.append({
                                 "name" : name,
                                 "time" : timedate,
@@ -165,24 +114,15 @@ for grp_id in visible_groups:
                     StaleElement = False
             except TimeoutException as ex:
                 print("Thrown exception: ", ex)
-    all_data+=whole_data
+                
+    checked = set()
+    cleaned_data = []
     for data in whole_data:
-        print(data["name"],"\t\t\t",data["time"],"\n",data["text"])
-    time.sleep(10)
-''' 
-   for text in texts:  
-        for tex in text:      
-            text_value = tex.get_attribute('innerHTML')
-            print(text_value)
-
-                    for author in authors:
-                        waitForElementTagName(driver, "author")
-                        print(author.get_attribute("innerHTML"))
-                    for timedate in times:
-                        waitForElementClassName(driver, "timestamp")
-                        print(timedate.get_attribute("innerHTML"))
-                    
-                    for text in texts:
-                        waitForElementClassName(driver, "post_text")
-                        print(text.get_attribute("innerHTML"))
-                        '''
+        t = tuple(data.items())
+        if t not in checked:
+            checked.add(t)
+            cleaned_data.append(data)
+    for data in cleaned_data:
+        chat_file.write(data["name"]+"\t\t\t"+data["time"]+"\n"+data["text"]+"\n")
+    chat_file.close()
+driver.close()
